@@ -68,7 +68,7 @@ if __name__ == "__main__":
     #net = load_network('/home/gibson/jonask/Projects/aNeuralN/ANNs/PERCEPTRON_FIXED.ann')
 
     #net = load_network('/home/gibson/jonask/Projects/aNeuralN/ANNs/4x10x10x1.ann')
-    net = build_feedforward(p, 8, 1, output_function = 'linear')
+    net = build_feedforward(p, 2, 1, output_function = 'linear')
 
     #Initial state
     outputs = net.sim(P)
