@@ -21,5 +21,5 @@ P, T = parse_data(xor_set, targetcols = 2, inputcols = [0, 1], normalize = False
 net = build_feedforward(2, 4, 1)
 
 print("Error before training: " + str(total_error(T, net.sim(P))))
-net = traingd(net, (P, T), (None, None), epochs = 1000, learning_rate = 1, block_size = 0)
-print("Error before training: " + str(total_error(T, net.sim(P))))
+net = traingd(net, (P, T), (None, None), epochs = 1000, learning_rate = 0.1, block_size = 0)
+print("Error after training: " + str(total_error(T, net.sim(P))))

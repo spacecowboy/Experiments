@@ -23,6 +23,19 @@ def plot_input(data):
     y = mlab.normpdf(bins, numpy.mean(data), numpy.std(data))
     l = plt.plot(bins, y, 'r--', linewidth = 1)
 
+def copy_without_tailcensored(Porg, Torg, cutoff = 5):
+    P = Porg.copy()
+    T = Torg.copy()
+    indices = []
+    for index in xrange(len(T)):
+        if T[index, 1] or T[index, 0] < cutoff:
+            indices.append(index)
+
+    T = T[indices]
+    P = P[indices]
+
+    return P, T
+
 def test(net, P, T, filename, epochs):
     logger.info("Running genetic test for: " + filename + ' ' + str(epochs))
     print("Number of patients with events: " + str(T[:, 1].sum()))
@@ -54,10 +67,13 @@ if __name__ == "__main__":
     #P, T = parse_file(filename, targetcols = [4, 5], inputcols = [2, -4, -3, -2, -1], ignorerows = [0], normalize = True)
     P, T = parse_file(filename, targetcols = [4, 5], inputcols = [2, -4, -3, -2, -1], ignorerows = [0], normalize = True)
 
+    #remove tail censored
+    P, T = copy_without_tailcensored(P, T)
+
     #Limit to incourage overtraining!
-    rows = sample(range(len(T)), 500)
-    P = P[rows]
-    T = T[rows]
+    #rows = sample(range(len(T)), 800)
+    #P = P[rows]
+    #T = T[rows]
 
     p = len(P[0]) #number of input covariates
 
