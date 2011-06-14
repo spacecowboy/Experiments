@@ -13,7 +13,9 @@ from random import sample
 logger = logging.getLogger('kalderstam.neural.cox_training')
 
 def c_index_error(target, result):
-    return 1.0 / get_C_index(target, result) #return inverse, error should be low if c_index is high
+    #len(target) first to compensate for internals in genetic training
+    #abs( - 0.5) to make both "positive" and "negative" C_index work, since they do
+    return len(target) / abs(get_C_index(target, result) - 0.5) #return inverse, error should be low if c_index is high
 
 def plot_input(data):
     plt.figure()
@@ -48,7 +50,7 @@ def test(net, P, T, filename, epochs):
     try:
         #net = train_cox(net, (P, T), (None, None), timeslots, epochs, learning_rate = learning_rate)
         #net = traingd(net, (P, T), (None, None), epochs, learning_rate, block_size, error_module = cox_error)
-        net = train_evolutionary(net, (P, T), (None, None), epochs, error_function = c_index_error)
+        net = train_evolutionary(net, (P, T), (None, None), epochs, error_function = c_index_error, population_size = 5)
     except FloatingPointError:
         print('Aaawww....')
     outputs = net.sim(P)
