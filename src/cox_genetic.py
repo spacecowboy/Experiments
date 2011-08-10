@@ -1,5 +1,6 @@
 from kalderstam.matlab.matlab_functions import plot_network_weights
-from kalderstam.util.filehandling import parse_file, load_network, save_network
+from kalderstam.util.filehandling import parse_file, load_network, save_network, \
+    get_validation_set, print_output
 from kalderstam.neural.network import build_feedforward, \
     build_feedforward_multilayered
 import numpy
@@ -52,7 +53,7 @@ def copy_without_tailcensored(Porg, Torg, cutoff = 5):
 
     return P, T
 
-def test(net, P, T, filename, epochs, mutation_rate = 0.05):
+def test(net, P, T, vP, vT, filename, epochs, mutation_rate = 0.05):
     logger.info("Running genetic test for: " + filename + ' ' + str(epochs))
     print("Number of patients with events: " + str(T[:, 1].sum()))
     print("Number of censored patients: " + str((1 - T[:, 1]).sum()))
@@ -63,7 +64,7 @@ def test(net, P, T, filename, epochs, mutation_rate = 0.05):
     logger.info("C index = " + str(c_index))
 
     try:
-        net = train_evolutionary(net, (P, T), (None, None), epochs, error_function = c_index_error, population_size = 50, mutation_chance = mutation_rate)
+        net = train_evolutionary(net, (P, T), (vP, vT), epochs, error_function = c_index_error, population_size = 50, mutation_chance = mutation_rate)
 
         outputs = net.sim(P)
         c_index = get_C_index(T, outputs)
@@ -74,7 +75,11 @@ def test(net, P, T, filename, epochs, mutation_rate = 0.05):
         print('Aaawww....')
     outputs = net.sim(P)
     c_index = get_C_index(T, outputs)
-    logger.info("C index = " + str(c_index))
+    logger.info("C index test = " + str(c_index))
+
+    outputs = net.sim(vP)
+    c_index = get_C_index(vT, outputs)
+    logger.info("C index vald = " + str(c_index))
 
     plot_network_weights(net)
 
@@ -85,9 +90,9 @@ if __name__ == "__main__":
     glogger.setLoggingLevel(glogger.debug)
 
     try:
-        mutation_rate = input('Please input a mutation rate (0.05): ')
+        mutation_rate = input('Please input a mutation rate (0.15): ')
     except SyntaxError as e:
-        mutation_rate = 0.05
+        mutation_rate = 0.15
 
     SB22 = "/home/gibson/jonask/Dropbox/Ann-Survival-Phd/Two_thirds_of_SA_1889_dataset_SB22.txt"
     Benmargskohorten = "/home/gibson/jonask/Dropbox/Ann-Survival-Phd/Two_thirds_of_SA_1889_dataset_Benmargskohorten.txt"
@@ -126,7 +131,10 @@ if __name__ == "__main__":
     studies[all_studies] = parse_file(all_studies, targetcols = [4, 5], inputcols = columns, ignorerows = [0], normalize = True)
 
     #remove tail censored
-    #P, T = copy_without_tailcensored(P, T)
+    P, T = copy_without_tailcensored(P, T)
+
+    #Divide into validation sets
+    ((tP, tT), (vP, vT)) = get_validation_set(P, T, validation_size = 0.2)
 
     #Fake data
     #productfunction_wn = '/home/gibson/jonask/Dropbox/Ann-Survival-Phd/fake_data_set/productfunction_many_with_noise.txt'
@@ -154,16 +162,16 @@ if __name__ == "__main__":
 
     p = len(P[0]) #number of input covariates
 
-    #net = build_feedforward(p, 10, 1, output_function = 'linear')
-    net = build_feedforward_multilayered(p, [7, 10], 1, output_function = 'linear')
+    net = build_feedforward(p, 5, 1, output_function = 'linear')
+    #net = build_feedforward_multilayered(p, [7, 10], 1, output_function = 'linear')
 
     #Initial state
-    outputs = net.sim(P)
-    orderscatter(outputs, T, filename, 's')
+    outputs = net.sim(tP)
+    orderscatter(outputs, tT, filename, 's')
 
     for var in xrange(len(P[0, :])):
         try:
-            plot_input(P[:, var])
+            plot_input(tP[:, var])
         except FloatingPointError as e:
             logger.error('Var ' + str(var) + ' failed plotting somehow...')
             print(e)
@@ -177,7 +185,7 @@ if __name__ == "__main__":
 
     for times in range(100):
         #train
-        net = test(net, P, T, filename, epochs, mutation_rate = mutation_rate)
+        net = test(net, tP, tT, vP, vT, filename, epochs, mutation_rate = mutation_rate)
 
         #show outputs on all different studies
         for sfile, (ps, ts) in studies.items():
@@ -185,3 +193,11 @@ if __name__ == "__main__":
             orderscatter(outputs, ts, sfile, 'o')
         raw_input("Press enter to show plots...")
         glogger.show()
+        try:
+            answer = input('Do you wish to print network output? [y]: ')
+        except SyntaxError as e:
+            answer = 'y'
+        if answer == 'y' or answer == 'yes':
+            ps, ts = studies[filename]
+            outputs = net.sim(ps)
+            print_output(filename, outputs)
