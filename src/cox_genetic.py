@@ -2,7 +2,7 @@ from kalderstam.matlab.matlab_functions import plot_network_weights
 from kalderstam.util.filehandling import parse_file, load_network, save_network, \
     get_validation_set, print_output
 from kalderstam.neural.network import build_feedforward, \
-    build_feedforward_multilayered
+    build_feedforward_multilayered, build_feedforward_committee
 import numpy
 from survival.cox_error import orderscatter, get_C_index
 import survival.cox_error as cox_error
@@ -53,7 +53,7 @@ def copy_without_tailcensored(Porg, Torg, cutoff = 5):
 
     return P, T
 
-def test(net, P, T, vP, vT, filename, epochs, mutation_rate = 0.05):
+def test(net, P, T, vP, vT, filename, epochs, mutation_rate = 0.05, population_size = 50):
     logger.info("Running genetic test for: " + filename + ' ' + str(epochs))
     print("Number of patients with events: " + str(T[:, 1].sum()))
     print("Number of censored patients: " + str((1 - T[:, 1]).sum()))
@@ -64,7 +64,7 @@ def test(net, P, T, vP, vT, filename, epochs, mutation_rate = 0.05):
     logger.info("C index = " + str(c_index))
 
     try:
-        net = train_evolutionary(net, (P, T), (vP, vT), epochs, error_function = c_index_error, population_size = 50, mutation_chance = mutation_rate)
+        net = train_evolutionary(net, (P, T), (vP, vT), epochs, error_function = c_index_error, population_size = population_size, mutation_chance = mutation_rate)
 
         outputs = net.sim(P)
         c_index = get_C_index(T, outputs)
@@ -85,14 +85,21 @@ def test(net, P, T, vP, vT, filename, epochs, mutation_rate = 0.05):
 
     return net
 
-if __name__ == "__main__":
-    logging.basicConfig(level = logging.INFO)
-    glogger.setLoggingLevel(glogger.debug)
+def train_single():
+    try:
+        netsize = input('Number of hidden nodes? [3]: ')
+    except SyntaxError as e:
+        netsize = 3
 
     try:
-        mutation_rate = input('Please input a mutation rate (0.15): ')
+        pop_size = input('Population size? [50]: ')
     except SyntaxError as e:
-        mutation_rate = 0.15
+        pop_size = 50
+
+    try:
+        mutation_rate = input('Please input a mutation rate (0.25): ')
+    except SyntaxError as e:
+        mutation_rate = 0.25
 
     SB22 = "/home/gibson/jonask/Dropbox/Ann-Survival-Phd/Two_thirds_of_SA_1889_dataset_SB22.txt"
     Benmargskohorten = "/home/gibson/jonask/Dropbox/Ann-Survival-Phd/Two_thirds_of_SA_1889_dataset_Benmargskohorten.txt"
@@ -106,7 +113,11 @@ if __name__ == "__main__":
     print("3: SB91b")
     print("0: All combined (default)")
 
-    study = input("Which study to train on?: ")
+    try:
+        study = input("Which study to train on? [0]: ")
+    except SyntaxError as e:
+        study = 0
+
     if study == 1:
         filename = SB22
     elif study == 2:
@@ -134,35 +145,13 @@ if __name__ == "__main__":
     P, T = copy_without_tailcensored(P, T)
 
     #Divide into validation sets
-    ((tP, tT), (vP, vT)) = get_validation_set(P, T, validation_size = 0.2)
-
-    #Fake data
-    #productfunction_wn = '/home/gibson/jonask/Dropbox/Ann-Survival-Phd/fake_data_set/productfunction_many_with_noise.txt'
-
-    #The training sample
-    #with_noise = productfunction_wn
-
-    #P, T_wn = parse_file(with_noise, targetcols = [4], inputcols = [0, 1, 2, 3], ignorecols = [], ignorerows = [], normalize = False)
-
-    #Amount to censor
-    #ratio = 0.50
-
-    #T_wn = censor_rndtest(T_wn, ratio)
-
-    #Training sample
-    #T = T_wn
-    #filename = with_noise
-
-    #Limit to incourage overtraining!
-    #rows = sample(range(len(T)), 500)
-    #P = P[rows]
-    #T = T[rows]
+    ((tP, tT), (vP, vT)) = get_validation_set(P, T, validation_size = 0.25)
 
     #Network part
 
     p = len(P[0]) #number of input covariates
 
-    net = build_feedforward(p, 5, 1, output_function = 'linear')
+    net = build_feedforward(p, netsize, 1, output_function = 'linear')
     #net = build_feedforward_multilayered(p, [7, 10], 1, output_function = 'linear')
 
     #Initial state
@@ -185,12 +174,8 @@ if __name__ == "__main__":
 
     for times in range(100):
         #train
-        net = test(net, tP, tT, vP, vT, filename, epochs, mutation_rate = mutation_rate)
+        net = test(net, tP, tT, vP, vT, filename, epochs, population_size = pop_size, mutation_rate = mutation_rate)
 
-        #show outputs on all different studies
-        for sfile, (ps, ts) in studies.items():
-            outputs = net.sim(ps)
-            orderscatter(outputs, ts, sfile, 'o')
         raw_input("Press enter to show plots...")
         glogger.show()
         try:
@@ -201,3 +186,14 @@ if __name__ == "__main__":
             ps, ts = studies[filename]
             outputs = net.sim(ps)
             print_output(filename, outputs)
+
+def cross_validation_test(number_of_hidden_nodes, P, T, epochs, mutation_rate, population_size):
+    build_feedforward_committee(10, len(P[0]), number_of_hidden_nodes, 1, output_function = 'linear')
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level = logging.INFO)
+    glogger.setLoggingLevel(glogger.debug)
+
+
+    train_single()
