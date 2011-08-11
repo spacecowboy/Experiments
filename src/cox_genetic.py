@@ -5,6 +5,7 @@ from kalderstam.neural.network import build_feedforward, \
     build_feedforward_multilayered, build_feedforward_committee
 import numpy
 from survival.cox_error import orderscatter, get_C_index
+from survival.cox_genetic import c_index_error
 import survival.cox_error as cox_error
 from survival.cox_error import censor_rndtest, pre_loop_func, calc_sigma, calc_beta, cox_error as cerror
 import kalderstam.util.graphlogger as glogger
@@ -14,17 +15,8 @@ from kalderstam.neural.training.davis_genetic import train_evolutionary
 import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 from random import sample
+from kalderstam.neural.training.committee import train_committee
 logger = logging.getLogger('kalderstam.neural.cox_training')
-
-def c_index_error(target, result):
-    #len(target) first to compensate for internals in genetic training
-    #abs( - 0.5) to make both "positive" and "negative" C_index work, since they do
-    C = get_C_index(target, result)
-    if C < 0.5:
-        #dont want these right now
-        C = 0.49 #this is bad
-
-    return len(target) / abs(C - 0.5) - 2 * len(target) #return inverse, error should be low if c_index is high. last minus term makes the minimum zero and not two.
 
 def beta_error(target, result):
     vars = pre_loop_func(None, None, target, 0)
@@ -155,8 +147,8 @@ def train_single():
     #net = build_feedforward_multilayered(p, [7, 10], 1, output_function = 'linear')
 
     #Initial state
-    outputs = net.sim(tP)
-    orderscatter(outputs, tT, filename, 's')
+    #outputs = net.sim(tP)
+    #orderscatter(outputs, tT, filename, 's')
 
     for var in xrange(len(P[0, :])):
         try:
@@ -187,13 +179,60 @@ def train_single():
             outputs = net.sim(ps)
             print_output(filename, outputs)
 
-def cross_validation_test(number_of_hidden_nodes, P, T, epochs, mutation_rate, population_size):
-    build_feedforward_committee(10, len(P[0]), number_of_hidden_nodes, 1, output_function = 'linear')
+def cross_validation_test():
+    glogger.setLoggingLevel(glogger.nothing)
+
+    filename = "/home/gibson/jonask/Dropbox/Ann-Survival-Phd/Two_thirds_of_SA_1889_dataset.txt"
+
+    try:
+        columns = input("Which columns to include? (Do NOT forget trailing comma if only one column is used, e.g. '3,'\nAvailable columns are: 2, -4, -3, -2, -1. Just press ENTER for all columns.\n")
+    except SyntaxError:
+        columns = (2, -4, -3, -2, -1)
+
+    P, T = parse_file(filename, targetcols = [4, 5], inputcols = columns, ignorerows = [0], normalize = True)
+    #remove tail censored
+    P, T = copy_without_tailcensored(P, T)
+
+    try:
+        comsize = input("Number of networks to cross-validate [10]: ")
+    except SyntaxError:
+        comsize = 10
+
+    try:
+        netsize = input('Number of hidden nodes [3]: ')
+    except SyntaxError as e:
+        netsize = 3
+
+    try:
+        pop_size = input('Population size [50]: ')
+    except SyntaxError as e:
+        pop_size = 50
+
+    try:
+        mutation_rate = input('Please input a mutation rate (0.25): ')
+    except SyntaxError as e:
+        mutation_rate = 0.25
+
+    try:
+        epochs = input("Number of generations (200): ")
+    except SyntaxError as e:
+        epochs = 200
+
+    com = build_feedforward_committee(comsize, len(P[0]), netsize, 1, output_function = 'linear')
+
+    test_errors, vald_errors = train_committee(com, train_evolutionary, P, T, epochs, error_function = c_index_error, population_size = pop_size, mutation_chance = mutation_rate)
+
+    print('\nTest Errors, Validation Errors:')
+    for terr, verr in zip(test_errors.values(), vald_errors.values()):
+        print(str(terr) + ", " + str(verr))
+
+    print('\nTest average, Validation average:')
+    print(str(sum(test_errors.values()) / len(test_errors.values())) + ', ' + str(sum(vald_errors.values()) / len(vald_errors.values())))
 
 
 if __name__ == "__main__":
     logging.basicConfig(level = logging.INFO)
     glogger.setLoggingLevel(glogger.debug)
 
-
-    train_single()
+    #train_single()
+    cross_validation_test()
