@@ -16,6 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib.mlab as mlab
 from random import sample
 from kalderstam.neural.training.committee import train_committee
+import sys
 logger = logging.getLogger('kalderstam.neural.cox_training')
 
 def beta_error(target, result):
@@ -184,39 +185,48 @@ def cross_validation_test():
 
     filename = "/home/gibson/jonask/Dropbox/Ann-Survival-Phd/Two_thirds_of_SA_1889_dataset.txt"
 
-    try:
-        columns = input("Which columns to include? (Do NOT forget trailing comma if only one column is used, e.g. '3,'\nAvailable columns are: 2, -4, -3, -2, -1. Just press ENTER for all columns.\n")
-    except SyntaxError:
-        columns = (2, -4, -3, -2, -1)
+    #try:
+    #    columns = input("Which columns to include? (Do NOT forget trailing comma if only one column is used, e.g. '3,'\nAvailable columns are: 2, -4, -3, -2, -1. Just press ENTER for all columns.\n")
+    #except SyntaxError:
+    columns = (2, -4, -3, -2, -1)
+    print('\nIncluding columns: ' + str(columns))
 
     P, T = parse_file(filename, targetcols = [4, 5], inputcols = columns, ignorerows = [0], normalize = True)
     #remove tail censored
     P, T = copy_without_tailcensored(P, T)
 
-    try:
-        comsize = input("Number of networks to cross-validate [10]: ")
-    except SyntaxError:
-        comsize = 10
+    #try:
+    #    comsize = input("Number of networks to cross-validate [10]: ")
+    #except SyntaxError:
+    comsize = 10
+    print('Number of networks to cross-validate: ' + str(comsize))
 
-    try:
-        netsize = input('Number of hidden nodes [3]: ')
-    except SyntaxError as e:
+    #try:
+    #    netsize = input('Number of hidden nodes [3]: ')
+    #except SyntaxError as e:
+    if len(sys.argv) < 2:
         netsize = 3
+    else:
+        netsize = sys.argv[1]
+    print("Number of hidden nodes: " + str(netsize))
 
-    try:
-        pop_size = input('Population size [50]: ')
-    except SyntaxError as e:
-        pop_size = 50
+    #try:
+    #    pop_size = input('Population size [50]: ')
+    #except SyntaxError as e:
+    pop_size = 50
+    print("Population size: " + str(pop_size))
 
-    try:
-        mutation_rate = input('Please input a mutation rate (0.25): ')
-    except SyntaxError as e:
-        mutation_rate = 0.25
+    #try:
+    #    mutation_rate = input('Please input a mutation rate (0.25): ')
+    #except SyntaxError as e:
+    mutation_rate = 0.25
+    print("Mutation rate: " + str(mutation_rate))
 
-    try:
-        epochs = input("Number of generations (200): ")
-    except SyntaxError as e:
-        epochs = 200
+    #try:
+    #    epochs = input("Number of generations (200): ")
+    #except SyntaxError as e:
+    epochs = 200
+    print("Epochs: " + str(epochs))
 
     com = build_feedforward_committee(comsize, len(P[0]), netsize, 1, output_function = 'linear')
 
