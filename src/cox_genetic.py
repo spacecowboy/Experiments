@@ -1,19 +1,25 @@
-from kalderstam.matlab.matlab_functions import plot_network_weights
 from kalderstam.util.filehandling import parse_file, load_network, save_network, \
     get_validation_set, print_output
 from kalderstam.neural.network import build_feedforward, \
     build_feedforward_multilayered, build_feedforward_committee
 import numpy
-from survival.cox_error import orderscatter, get_C_index
+from survival.cox_error import get_C_index
 from survival.cox_genetic import c_index_error
 import survival.cox_error as cox_error
 from survival.cox_error import censor_rndtest, pre_loop_func, calc_sigma, calc_beta, cox_error as cerror
-import kalderstam.util.graphlogger as glogger
 import logging
 from kalderstam.neural.training.gradientdescent import traingd
 from kalderstam.neural.training.davis_genetic import train_evolutionary
-import matplotlib.pyplot as plt
-import matplotlib.mlab as mlab
+import kalderstam.util.graphlogger as glogger
+try:
+    import matplotlib.pyplot as plt
+    import matplotlib.mlab as mlab
+    from kalderstam.matlab.matlab_functions import plot_network_weights
+except ImportError:
+    plt = None
+except RuntimeError:
+    plt = None
+
 from random import sample
 from kalderstam.neural.training.committee import train_committee
 import sys
@@ -26,12 +32,13 @@ def beta_error(target, result):
     return len(result) * cerror(beta, sigma)
 
 def plot_input(data):
-    plt.figure()
-    plt.title("Mean: " + str(numpy.mean(data)) + " Std: " + str(numpy.std(data)))
-    n, bins, patches = plt.hist(data, 50, normed = 1, facecolor = 'green', alpha = 0.75)
-    # add a 'best fit' line
-    y = mlab.normpdf(bins, numpy.mean(data), numpy.std(data))
-    l = plt.plot(bins, y, 'r--', linewidth = 1)
+    if plt:
+        plt.figure()
+        plt.title("Mean: " + str(numpy.mean(data)) + " Std: " + str(numpy.std(data)))
+        n, bins, patches = plt.hist(data, 50, normed = 1, facecolor = 'green', alpha = 0.75)
+        # add a 'best fit' line
+        y = mlab.normpdf(bins, numpy.mean(data), numpy.std(data))
+        l = plt.plot(bins, y, 'r--', linewidth = 1)
 
 def copy_without_tailcensored(Porg, Torg, cutoff = 5):
     P = Porg.copy()
@@ -74,7 +81,8 @@ def test(net, P, T, vP, vT, filename, epochs, mutation_rate = 0.05, population_s
     c_index = get_C_index(vT, outputs)
     logger.info("C index vald = " + str(c_index))
 
-    plot_network_weights(net)
+    if plt:
+        plot_network_weights(net)
 
     return net
 
@@ -230,7 +238,8 @@ def cross_validation_test():
 
     com = build_feedforward_committee(comsize, len(P[0]), netsize, 1, output_function = 'linear')
 
-    test_errors, vald_errors = train_committee(com, train_evolutionary, P, T, epochs, error_function = c_index_error, population_size = pop_size, mutation_chance = mutation_rate)
+    #1 is the column in the target array which holds teh binary censoring information
+    test_errors, vald_errors = train_committee(com, train_evolutionary, P, T, 1, epochs, error_function = c_index_error, population_size = pop_size, mutation_chance = mutation_rate)
 
     print('\nTest Errors, Validation Errors:')
     for terr, verr in zip(test_errors.values(), vald_errors.values()):
