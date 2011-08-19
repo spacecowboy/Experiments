@@ -60,31 +60,33 @@ for filename in sys.argv[1:]:
                     print 'Data ended, ending state...'
                     state = 'None'
 
-    ps.append(ax.errorbar(netsize - 0.1, error_avg[filename],
-                 yerr = [[min(errors[filename])], [max(errors[filename])]],
-                 marker = 'o',
-                 color = 'k',
-                 ecolor = 'k',
-                 markerfacecolor = 'g',
-                 label = filename + ' error',
-                 capsize = 5,
-                 linestyle = 'None'))
+    plotlines, caplines, barlinecols = ax.errorbar(netsize - 0.1, error_avg[filename],
+                                         yerr = [[error_avg[filename] - min(errors[filename])], [-error_avg[filename] + max(errors[filename])]],
+                                         marker = 'o',
+                                         color = 'k',
+                                         ecolor = 'k',
+                                         markerfacecolor = 'g',
+                                         label = filename + ' error',
+                                         capsize = 5,
+                                         linestyle = 'None')
+    ps.append(plotlines)
 
     labels.append(filename + ' error')
 
-    ps.append(ax.errorbar(netsize + 0.1, validation_avg[filename],
-                 yerr = [[min(validations[filename])], [max(validations[filename])]],
-                 marker = 's',
-                 color = 'k',
-                 ecolor = 'r',
-                 markerfacecolor = 'r',
-                 label = filename + ' validation',
-                 capsize = 5,
-                 linestyle = 'None'))
+    plotlines, caplines, barlinecols = ax.errorbar(netsize + 0.1, validation_avg[filename],
+                                         yerr = [[validation_avg[filename] - min(validations[filename])], [-validation_avg[filename] + max(validations[filename])]],
+                                         marker = 's',
+                                         color = 'k',
+                                         ecolor = 'r',
+                                         markerfacecolor = 'r',
+                                         label = filename + ' validation',
+                                         capsize = 5,
+                                         linestyle = 'None')
+    ps.append(plotlines)
 
     labels.append(filename + ' validation')
 
-leg = fig.legend(ps, labels, 'lower right')
+#leg = fig.legend(ps, labels, 'lower right')
 
 ax.set_xlabel("Number of hidden nodes")
 ax.set_ylabel("Training and Validation errors")
