@@ -55,8 +55,12 @@ def copy_without_tailcensored(Porg, Torg, cutoff = 5):
 
 def test(net, P, T, vP, vT, filename, epochs, mutation_rate = 0.05, population_size = 50):
     logger.info("Running genetic test for: " + filename + ' ' + str(epochs))
+    print("\nTraining set:")
     print("Number of patients with events: " + str(T[:, 1].sum()))
     print("Number of censored patients: " + str((1 - T[:, 1]).sum()))
+    print("\nValidation set:")
+    print("Number of patients with events: " + str(vT[:, 1].sum()))
+    print("Number of censored patients: " + str((1 - vT[:, 1]).sum()))
 
 
     outputs = net.sim(P)
@@ -201,13 +205,18 @@ def cross_validation_test():
 
     P, T = parse_file(filename, targetcols = [4, 5], inputcols = columns, ignorerows = [0], normalize = True)
     #remove tail censored
+    print('\nRemoving tail censored...')
     P, T = copy_without_tailcensored(P, T)
+
+    print("\nData set:")
+    print("Number of patients with events: " + str(T[:, 1].sum()))
+    print("Number of censored patients: " + str((1 - T[:, 1]).sum()))
 
     #try:
     #    comsize = input("Number of networks to cross-validate [10]: ")
     #except SyntaxError:
     comsize = 10
-    print('Number of networks to cross-validate: ' + str(comsize))
+    print('\nNumber of networks to cross-validate: ' + str(comsize))
 
     #try:
     #    netsize = input('Number of hidden nodes [3]: ')

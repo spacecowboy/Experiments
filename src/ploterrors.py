@@ -9,6 +9,12 @@ import sys
 import numpy as np
 import matplotlib.pyplot as plt
 
+def reverse_error(e):
+    ''' Reverse the error:
+    1 / (C - 0.5) - 2
+    '''
+    return 1.0 / (float(e) + 2.0) + 0.5
+
 if len(sys.argv) < 2:
     print('Proper usage is: ' + sys.argv[0] + ' filename1 [filename2] [filename3] etc')
     sys.exit()
@@ -44,8 +50,8 @@ for filename in sys.argv[1:]:
                 try:
                     vals = line.split(', ')
                     print(vals)
-                    errors[filename] = np.append(errors[filename], float(vals[0]))
-                    validations[filename] = np.append(validations[filename], float(vals[1]))
+                    errors[filename] = np.append(errors[filename], reverse_error(vals[0]))
+                    validations[filename] = np.append(validations[filename], reverse_error(vals[1]))
                 except ValueError:
                     print 'Data ended, ending state...'
                     state = 'None'
@@ -54,8 +60,8 @@ for filename in sys.argv[1:]:
                 try:
                     print(vals)
                     vals = line.split(', ')
-                    error_avg[filename] = float(vals[0])
-                    validation_avg[filename] = float(vals[1])
+                    error_avg[filename] = reverse_error(vals[0])
+                    validation_avg[filename] = reverse_error(vals[1])
                 except ValueError:
                     print 'Data ended, ending state...'
                     state = 'None'
@@ -88,9 +94,9 @@ for filename in sys.argv[1:]:
 
 #leg = fig.legend(ps, labels, 'lower right')
 
-ax.set_xlabel("Number of hidden nodes")
-ax.set_ylabel("Training and Validation errors")
-ax.set_title('Cross validation results')
+ax.set_xlabel("Number of hidden nodes -->")
+ax.set_ylabel("Training and Validation C-Index values (0.5 - 1.0) -->")
+ax.set_title('Cross validation C-Index results.')
 
 plt.xlim(0, netsize + 1)
 plt.show()
