@@ -92,5 +92,5 @@ ax.set_xlabel("Number of hidden nodes")
 ax.set_ylabel("Training and Validation errors")
 ax.set_title('Cross validation results')
 
-plt.xlim(0, 6)
+plt.xlim(0, netsize + 1)
 plt.show()
