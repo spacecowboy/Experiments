@@ -113,7 +113,7 @@ if __name__ == '__main__':
 
     #GPU part
     print cl.get_platforms()[0].get_devices()[0]
-    cl.Context(devices = cl.get_platforms()[0].get_devices())
+    #cl.Context(devices = cl.get_platforms()[0].get_devices())
     example = CL()
     example.loadProgram("gpunetworktest.cl")
     example.popCorn()

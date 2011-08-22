@@ -1,5 +1,5 @@
 from kalderstam.util.filehandling import parse_file, load_network, save_network, \
-    get_validation_set, print_output
+    get_validation_set, print_output, get_cross_validation_sets
 from kalderstam.neural.network import build_feedforward, \
     build_feedforward_multilayered, build_feedforward_committee
 import numpy
@@ -11,6 +11,7 @@ import logging
 from kalderstam.util.decorators import benchmark_adv
 from kalderstam.neural.training.gradientdescent import traingd
 from kalderstam.neural.training.davis_genetic import train_evolutionary
+#from kalderstam.neural.training.genetic import train_evolutionary
 import kalderstam.util.graphlogger as glogger
 try:
     import matplotlib.pyplot as plt
@@ -145,10 +146,11 @@ def train_single():
     studies[all_studies] = parse_file(all_studies, targetcols = [4, 5], inputcols = columns, ignorerows = [0], normalize = True)
 
     #remove tail censored
-    P, T = copy_without_tailcensored(P, T)
+    #P, T = copy_without_tailcensored(P, T)
 
     #Divide into validation sets
-    ((tP, tT), (vP, vT)) = get_validation_set(P, T, validation_size = 0.25, binary_column = 1)
+    #((tP, tT), (vP, vT)) = get_validation_set(P, T, validation_size = 0.25, binary_column = 1)
+    TandV = get_cross_validation_sets(P, T, 2 , binary_column = 1)
 
     #Network part
 
@@ -157,38 +159,25 @@ def train_single():
     net = build_feedforward(p, netsize, 1, output_function = 'linear')
     #net = build_feedforward_multilayered(p, [7, 10], 1, output_function = 'linear')
 
-    #Initial state
-    #outputs = net.sim(tP)
-    #orderscatter(outputs, tT, filename, 's')
-
-    for var in xrange(len(P[0, :])):
-        try:
-            plot_input(tP[:, var])
-        except FloatingPointError as e:
-            logger.error('Var ' + str(var) + ' failed plotting somehow...')
-            print(e)
-
-    glogger.show()
-
     try:
         epochs = input("Number of generations (200): ")
     except SyntaxError as e:
         epochs = 200
 
-    for times in xrange(1):
+    for times, ((tP, tT), (vP, vT)) in zip(xrange(2), TandV):
         #train
         net = test(net, tP, tT, vP, vT, filename, epochs, population_size = pop_size, mutation_rate = mutation_rate)
 
         raw_input("Press enter to show plots...")
         glogger.show()
-        try:
-            answer = input('Do you wish to print network output? [y]: ')
-        except SyntaxError as e:
-            answer = 'y'
-        if answer == 'y' or answer == 'yes':
-            ps, ts = studies[filename]
-            outputs = net.sim(ps)
-            print_output(filename, outputs)
+        #try:
+        #    answer = input('Do you wish to print network output? [y]: ')
+        #except SyntaxError as e:
+        #    answer = 'y'
+        #if answer == 'y' or answer == 'yes':
+        #    ps, ts = studies[filename]
+        #    outputs = net.sim(ps)
+        #    print_output(filename, outputs)
 
 def cross_validation_test():
     glogger.setLoggingLevel(glogger.nothing)
@@ -259,5 +248,5 @@ if __name__ == "__main__":
     #cross_validation_test()
     import kalderstam.util.decorators as dec
     print('\nBenchmarking results')
-    for f, t in sorted(dec._bench_runs[0].items(), key=lambda x: x[1], reverse=True):
+    for f, t in sorted(dec._bench_runs[0].items(), key = lambda x: x[1], reverse = True):
         print(f + ' ' + str(t))

@@ -67,16 +67,11 @@ if __name__ == "__main__":
     P, T = copy_without_tailcensored(P, T)
 
     #Limit to incourage overtraining!
-    #rows = sample(range(len(T)), 500)
+    #rows = sample(range(len(T)), 100)
     #P = P[rows]
     #T = T[rows]
 
     p = len(P[0]) #number of input covariates
-    #net = load_network('/home/gibson/jonask/Projects/aNeuralN/ANNs/PERCEPTRON.ann')
-    #net = load_network('/home/gibson/jonask/Projects/aNeuralN/ANNs/PERCEPTRON_ALPHA.ann')
-    #net = load_network('/home/gibson/jonask/Projects/aNeuralN/ANNs/PERCEPTRON_OMEGA.ann')
-    #net = load_network('/home/gibson/jonask/Projects/aNeuralN/ANNs/PERCEPTRON_SIGMOID.ann')
-    #net = load_network('/home/gibson/jonask/Projects/aNeuralN/ANNs/PERCEPTRON_FIXED.ann')
 
     #net = load_network('/home/gibson/jonask/Projects/aNeuralN/ANNs/4x10x10x1.ann')
     net = build_feedforward(p, 30, 1, output_function = 'linear')
@@ -91,7 +86,7 @@ if __name__ == "__main__":
     glogger.show()
 
     epochs = 20000
-    rate = 50
+    rate = 1
     block_size = 0
 
     for times in range(100):
@@ -99,4 +94,5 @@ if __name__ == "__main__":
 
         outputs = net.sim(P)
         orderscatter(outputs, T, filename, 'o')
+        raw_input("Press enter to show plots...")
         glogger.show()

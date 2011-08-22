@@ -60,11 +60,13 @@ for filename in sys.argv[1:]:
                 try:
                     print(vals)
                     vals = line.split(', ')
-                    error_avg[filename] = reverse_error(vals[0])
-                    validation_avg[filename] = reverse_error(vals[1])
+                    #error_avg[filename] = reverse_error(vals[0])
+                    #validation_avg[filename] = reverse_error(vals[1])
                 except ValueError:
                     print 'Data ended, ending state...'
                     state = 'None'
+        error_avg[filename] = errors[filename].mean()
+        validation_avg[filename] = validations[filename].mean()
 
     plotlines, caplines, barlinecols = ax.errorbar(netsize - 0.1, error_avg[filename],
                                          yerr = [[error_avg[filename] - min(errors[filename])], [-error_avg[filename] + max(errors[filename])]],

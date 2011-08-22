@@ -10,6 +10,7 @@ from survival.cox_error import censor_rndtest, pre_loop_func, calc_sigma, calc_b
 import logging
 from kalderstam.neural.training.gradientdescent import traingd
 from kalderstam.neural.training.davis_genetic import train_evolutionary
+#from kalderstam.neural.training.genetic import train_evolutionary
 import kalderstam.util.graphlogger as glogger
 try:
     import matplotlib.pyplot as plt
@@ -205,8 +206,8 @@ def cross_validation_test():
 
     P, T = parse_file(filename, targetcols = [4, 5], inputcols = columns, ignorerows = [0], normalize = True)
     #remove tail censored
-    print('\nRemoving tail censored...')
-    P, T = copy_without_tailcensored(P, T)
+    #print('\nRemoving tail censored...')
+    #P, T = copy_without_tailcensored(P, T)
 
     print("\nData set:")
     print("Number of patients with events: " + str(T[:, 1].sum()))
@@ -215,8 +216,11 @@ def cross_validation_test():
     #try:
     #    comsize = input("Number of networks to cross-validate [10]: ")
     #except SyntaxError:
-    comsize = 10
+    comsize = 4
     print('\nNumber of networks to cross-validate: ' + str(comsize))
+
+    times_to_cross = 3
+    print('\nNumber of times to repeat cross-validation: ' + str(times_to_cross))
 
     #try:
     #    netsize = input('Number of hidden nodes [3]: ')
@@ -236,7 +240,7 @@ def cross_validation_test():
     #try:
     #    mutation_rate = input('Please input a mutation rate (0.25): ')
     #except SyntaxError as e:
-    mutation_rate = 0.25
+    mutation_rate = 0.15
     print("Mutation rate: " + str(mutation_rate))
 
     #try:
@@ -245,17 +249,15 @@ def cross_validation_test():
     epochs = 200
     print("Epochs: " + str(epochs))
 
-    com = build_feedforward_committee(comsize, len(P[0]), netsize, 1, output_function = 'linear')
+    for _ in xrange(times_to_cross):
+        com = build_feedforward_committee(comsize, len(P[0]), netsize, 1, output_function = 'linear')
 
-    #1 is the column in the target array which holds teh binary censoring information
-    test_errors, vald_errors = train_committee(com, train_evolutionary, P, T, 1, epochs, error_function = c_index_error, population_size = pop_size, mutation_chance = mutation_rate)
+        #1 is the column in the target array which holds teh binary censoring information
+        test_errors, vald_errors = train_committee(com, train_evolutionary, P, T, 1, epochs, error_function = c_index_error, population_size = pop_size, mutation_chance = mutation_rate)
 
-    print('\nTest Errors, Validation Errors:')
-    for terr, verr in zip(test_errors.values(), vald_errors.values()):
-        print(str(terr) + ", " + str(verr))
-
-    print('\nTest average, Validation average:')
-    print(str(sum(test_errors.values()) / len(test_errors.values())) + ', ' + str(sum(vald_errors.values()) / len(vald_errors.values())))
+        print('\nTest Errors, Validation Errors:')
+        for terr, verr in zip(test_errors.values(), vald_errors.values()):
+            print(str(terr) + ", " + str(verr))
 
 
 if __name__ == "__main__":
