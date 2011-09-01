@@ -7,6 +7,7 @@ from kalderstam.neural.error_functions.sum_squares import total_error
 from kalderstam.neural.network import build_feedforward
 from kalderstam.util.filehandling import parse_data
 from kalderstam.neural.training.gradientdescent import traingd
+from kalderstam.neural.training.davis_genetic import train_evolutionary
 import numpy
 
 xor_set = [[0, 0, 0],
@@ -23,3 +24,8 @@ net = build_feedforward(2, 4, 1)
 print("Error before training: " + str(total_error(T, net.sim(P))))
 net = traingd(net, (P, T), (None, None), epochs = 1000, learning_rate = 0.1, block_size = 0)
 print("Error after training: " + str(total_error(T, net.sim(P))))
+
+net = build_feedforward(2, 4, 1)
+print("Error before genetic training: " + str(total_error(T, net.sim(P))))
+net = train_evolutionary(net, (P, T), (None, None), epochs = 100, population_size = 100)
+print("Error after genetic training: " + str(total_error(T, net.sim(P))))

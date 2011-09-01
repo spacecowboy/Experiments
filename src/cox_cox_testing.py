@@ -1,19 +1,23 @@
 from kalderstam.matlab.matlab_functions import plot_network_weights
-from kalderstam.util.filehandling import parse_file, load_network, save_network
+from kalderstam.util.filehandling import parse_file, load_network, save_network, \
+    get_cross_validation_sets
 from kalderstam.neural.network import build_feedforward
 import time
 import numpy
 import matplotlib.pyplot as plt
 from survival.cox_error import calc_sigma, calc_beta, generate_timeslots, \
-    censor_rndtest, get_C_index, orderscatter
+    censor_rndtest, orderscatter
+from survival.cox_error_in_c import get_C_index
 import survival.cox_error as cox_error
 import kalderstam.util.graphlogger as glogger
 import logging
 from kalderstam.neural.training.gradientdescent import traingd
+from survival.plotting import kaplanmeier
+import sys
 
 logger = logging.getLogger('kalderstam.neural.cox_training')
 
-def experiment(net, P, T, filename, epochs, learning_rate):
+def experiment(net, P, T, vP, vT, filename, epochs, learning_rate):
     logger.info("Running experiment for: " + filename + ' ' + str(epochs) + ", rate: " + str(learning_rate))
     print("Number of patients with events: " + str(T[:, 1].sum()))
     print("Number of censored patients: " + str((1 - T[:, 1]).sum()))
@@ -21,81 +25,83 @@ def experiment(net, P, T, filename, epochs, learning_rate):
     timeslots = generate_timeslots(T)
 
     try:
-        net = traingd(net, (P, T), (None, None), epochs, learning_rate, block_size = 100, error_module = cox_error)
+        net = traingd(net, (P, T), (vP, vT), epochs, learning_rate, block_size = 100, error_module = cox_error)
     except FloatingPointError:
         print('Aaawww....')
     outputs = net.sim(P)
     c_index = get_C_index(T, outputs)
     logger.info("C index = " + str(c_index))
 
-    plot_network_weights(net)
+    #plot_network_weights(net)
 
-    plt.figure()
-    plt.title('Scatter plot cox error\n' + filename + "\nC index = " + str(c_index))
-    plt.xlabel('Survival time years')
-    plt.ylabel('Network output')
-    try:
-        for t, o, e in zip(T[:, 0], outputs[:, 0], T[:, 1]):
-            c = 'r'
-            if e == 1:
-                c = 'g'
-            plt.scatter(t, o, c = c, marker = 's')
-        #plt.scatter(T[:, 0].flatten(), outputs[:, 0].flatten(), c = 'g', marker = 's')
-        plt.plot(T[:, 0].flatten(), T[:, 0].flatten(), 'r-')
-    except:
-        pass
+    kaplanmeier(time_array = T[:, 0], event_array = T[:, 1], output_array = outputs[:, 0])
+    if vP is not None and len(vP) > 0:
+        outputs = net.sim(vP)
+        kaplanmeier(time_array = vT[:, 0], event_array = vT[:, 1], output_array = outputs[:, 0])
 
     return net
 
 if __name__ == "__main__":
     logging.basicConfig(level = logging.INFO)
-    glogger.setLoggingLevel(glogger.debug)
+    glogger.setLoggingLevel(glogger.nothing)
 
-    p = 4 #number of input covariates
-    #net = load_network('/home/gibson/jonask/Projects/aNeuralN/ANNs/PERCEPTRON.ann')
-    #net = load_network('/home/gibson/jonask/Projects/aNeuralN/ANNs/PERCEPTRON_ALPHA.ann')
-    #net = load_network('/home/gibson/jonask/Projects/aNeuralN/ANNs/PERCEPTRON_OMEGA.ann')
-    #net = load_network('/home/gibson/jonask/Projects/aNeuralN/ANNs/PERCEPTRON_SIGMOID.ann')
-    #net = load_network('/home/gibson/jonask/Projects/aNeuralN/ANNs/PERCEPTRON_FIXED.ann')
-    #net = load_network('/home/gibson/jonask/Projects/aNeuralN/ANNs/4x10x10x1.ann')
-    net = build_feedforward(p, 6, 1, output_function = 'linear')
-    lineartarget_nn = '/home/gibson/jonask/Dropbox/Ann-Survival-Phd/fake_data_set/lineartarget_no_noise.txt'
-    nonlineartarget_nn = '/home/gibson/jonask/Dropbox/Ann-Survival-Phd/fake_data_set/nonlineartarget_no_noise.txt'
-    lineartarget_wn = '/home/gibson/jonask/Dropbox/Ann-Survival-Phd/fake_data_set/lineartarget_with_noise.txt'
-    nonlineartarget_wn = '/home/gibson/jonask/Dropbox/Ann-Survival-Phd/fake_data_set/nonlineartarget_with_noise.txt'
-    productfunction_nn = '/home/gibson/jonask/Dropbox/Ann-Survival-Phd/fake_data_set/productfunction_many_no_noise.txt'
-    productfunction_wn = '/home/gibson/jonask/Dropbox/Ann-Survival-Phd/fake_data_set/productfunction_many_with_noise.txt'
+    filename = "/home/gibson/jonask/Dropbox/Ann-Survival-Phd/Two_thirds_of_SA_1889_dataset.txt"
 
-    #The training sample
-    no_noise = productfunction_nn
-    with_noise = productfunction_wn
+    #try:
+    #    columns = input("Which columns to include? (Do NOT forget trailing comma if only one column is used, e.g. '3,'\nAvailable columns are: 2, -4, -3, -2, -1. Just press ENTER for all columns.\n")
+    #except SyntaxError:
+    columns = (2, -4, -3, -2, -1)
+    print('\nIncluding columns: ' + str(columns))
 
-    P, T_nn = parse_file(no_noise, targetcols = [4], inputcols = [0, 1, 2, 3], ignorecols = [], ignorerows = [], normalize = False)
-    P, T_wn = parse_file(with_noise, targetcols = [4], inputcols = [0, 1, 2, 3], ignorecols = [], ignorerows = [], normalize = False)
+    P, T = parse_file(filename, targetcols = [4, 5], inputcols = columns, ignorerows = [0], normalize = True)
+    #remove tail censored
+    #print('\nRemoving tail censored...')
+    #P, T = copy_without_tailcensored(P, T)
 
-    #Amount to censor
-    ratio = 0.75
+    try:
+        pieces = input('Number of crossvalidation pieces? [1]: ')
+    except SyntaxError as e:
+        pieces = 1
 
-    T_nn = censor_rndtest(T_nn, ratio)
-    T_wn = censor_rndtest(T_wn, ratio)
+    #Divide into validation sets
+    TandV = get_cross_validation_sets(P, T, pieces , binary_column = 1)
 
-    #Training sample
-    T = T_wn
-    filename = with_noise
+    for set, ((tP, tT), (vP, vT)) in zip(range(pieces), TandV):
+        print("\nCross validation set " + str(set))
+        print("Training")
+        print("Number of patients with events: " + str(tT[:, 1].sum()))
+        print("Number of censored patients: " + str((1 - tT[:, 1]).sum()))
+        print("Validation")
+        print("Number of patients with events: " + str(vT[:, 1].sum()))
+        print("Number of censored patients: " + str((1 - vT[:, 1]).sum()))
 
-    #Initial state
-    outputs = net.sim(P)
-    orderscatter(outputs, T_nn, no_noise)
+    try:
+        netsize = input('\nNumber of hidden nodes? [3]: ')
+    except SyntaxError as e:
+        netsize = 3
+
+    try:
+        blocksize = input('Blocksize? [100]: ')
+    except SyntaxError as e:
+        blocksize = 100
+
+    try:
+        epochs = input("Number of epochs (200): ")
+    except SyntaxError as e:
+        epochs = 200
+
+    try:
+        rate = input('Learning rate? [1]: ')
+    except SyntaxError as e:
+        rate = 1
+
+    #Network part
+    p = len(P[0]) #number of input covariates
+
+    for set, ((tP, tT), (vP, vT)) in zip(range(pieces), TandV):
+
+        net = build_feedforward(p, netsize, 1, output_function = 'linear')
+
+        net = experiment(net, tP, tT, vP, vT, filename, epochs, rate)
+
     plt.show()
-
-    epochs = 100
-    rate = 5
-
-    for times in range(100):
-        net = experiment(net, P, T, filename, epochs, rate)
-        outputs = net.sim(P)
-
-        orderscatter(outputs, T_nn, no_noise)
-        orderscatter(outputs, T_wn, with_noise)
-        glogger.setup()
-        plt.show()

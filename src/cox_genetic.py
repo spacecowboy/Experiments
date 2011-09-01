@@ -1,21 +1,22 @@
 from kalderstam.util.filehandling import parse_file, load_network, save_network, \
-    get_validation_set, print_output
+    get_validation_set, print_output, get_cross_validation_sets
 from kalderstam.neural.network import build_feedforward, \
     build_feedforward_multilayered, build_feedforward_committee
 import numpy
-from survival.cox_error import get_C_index
+from survival.cox_error_in_c import get_C_index
 from survival.cox_genetic import c_index_error
-import survival.cox_error as cox_error
 from survival.cox_error import censor_rndtest, pre_loop_func, calc_sigma, calc_beta, cox_error as cerror
 import logging
 from kalderstam.neural.training.gradientdescent import traingd
 from kalderstam.neural.training.davis_genetic import train_evolutionary
 #from kalderstam.neural.training.genetic import train_evolutionary
-import kalderstam.util.graphlogger as glogger
+import os
+import random
 try:
     import matplotlib.pyplot as plt
     import matplotlib.mlab as mlab
     from kalderstam.matlab.matlab_functions import plot_network_weights
+    from survival.plotting import kaplanmeier
 except ImportError:
     plt = None
 except RuntimeError:
@@ -41,7 +42,11 @@ def plot_input(data):
         y = mlab.normpdf(bins, numpy.mean(data), numpy.std(data))
         l = plt.plot(bins, y, 'r--', linewidth = 1)
 
-def copy_without_tailcensored(Porg, Torg, cutoff = 5):
+def copy_without_censored(Porg, Torg, cutoff = 0):
+    '''
+    Cutoff = 5 (default), specifies up to which time censored data is allowed to in the data set.
+    Note that this limit is non-inclusive. If cutoff = 5, then all censored data with time >= 5 will be removed.
+    '''
     P = Porg.copy()
     T = Torg.copy()
     indices = []
@@ -60,52 +65,50 @@ def test(net, P, T, vP, vT, filename, epochs, mutation_rate = 0.05, population_s
     print("Number of patients with events: " + str(T[:, 1].sum()))
     print("Number of censored patients: " + str((1 - T[:, 1]).sum()))
     print("\nValidation set:")
-    print("Number of patients with events: " + str(vT[:, 1].sum()))
-    print("Number of censored patients: " + str((1 - vT[:, 1]).sum()))
+    if vP is not None and len(vP) > 0:
+        print("Number of patients with events: " + str(vT[:, 1].sum()))
+        print("Number of censored patients: " + str((1 - vT[:, 1]).sum()))
+    else:
+        print("Empty")
 
 
     outputs = net.sim(P)
     c_index = get_C_index(T, outputs)
-    logger.info("C index = " + str(c_index))
+    logger.info("C index test = " + str(c_index))
 
     try:
         net = train_evolutionary(net, (P, T), (vP, vT), epochs, error_function = c_index_error, population_size = population_size, mutation_chance = mutation_rate)
 
         outputs = net.sim(P)
-        c_index = get_C_index(T, outputs)
-        logger.info("C index = " + str(c_index))
 
-        #net = traingd(net, (P, T), (None, None), epochs * 2, learning_rate = 1, block_size = 0, error_module = cox_error)
     except FloatingPointError:
         print('Aaawww....')
     outputs = net.sim(P)
     c_index = get_C_index(T, outputs)
     logger.info("C index test = " + str(c_index))
 
-    outputs = net.sim(vP)
-    c_index = get_C_index(vT, outputs)
-    logger.info("C index vald = " + str(c_index))
-
-    if plt:
-        plot_network_weights(net)
+    if vP is not None and len(vP) > 0:
+        outputs = net.sim(vP)
+        c_index = get_C_index(vT, outputs)
+        logger.info("C index vald = " + str(c_index))
 
     return net
 
 def train_single():
     try:
-        netsize = input('Number of hidden nodes? [3]: ')
+        netsize = input('Number of hidden nodes? [1]: ')
     except SyntaxError as e:
-        netsize = 3
+        netsize = 1
 
     try:
-        pop_size = input('Population size? [50]: ')
+        pop_size = input('Population size? [100]: ')
     except SyntaxError as e:
-        pop_size = 50
+        pop_size = 100
 
     try:
-        mutation_rate = input('Please input a mutation rate (0.25): ')
+        mutation_rate = input('Please input a mutation rate (0.05): ')
     except SyntaxError as e:
-        mutation_rate = 0.25
+        mutation_rate = 0.05
 
     SB22 = "/home/gibson/jonask/Dropbox/Ann-Survival-Phd/Two_thirds_of_SA_1889_dataset_SB22.txt"
     Benmargskohorten = "/home/gibson/jonask/Dropbox/Ann-Survival-Phd/Two_thirds_of_SA_1889_dataset_Benmargskohorten.txt"
@@ -148,10 +151,18 @@ def train_single():
     studies[all_studies] = parse_file(all_studies, targetcols = [4, 5], inputcols = columns, ignorerows = [0], normalize = True)
 
     #remove tail censored
-    P, T = copy_without_tailcensored(P, T)
+    try:
+        cutoff = input('Cutoff for censored data? [9999 years]: ')
+    except SyntaxError as e:
+        cutoff = 9999
+    P, T = copy_without_censored(P, T, cutoff)
 
     #Divide into validation sets
-    ((tP, tT), (vP, vT)) = get_validation_set(P, T, validation_size = 0.25)
+    try:
+        pieces = input('Size of validation set? Input denominator (1 for no validation set). Default is 1/[1] parts: ')
+    except:
+        pieces = 1
+    TandV = get_cross_validation_sets(P, T, pieces , binary_column = 1)
 
     #Network part
 
@@ -164,50 +175,53 @@ def train_single():
     #outputs = net.sim(tP)
     #orderscatter(outputs, tT, filename, 's')
 
-    for var in xrange(len(P[0, :])):
-        try:
-            plot_input(tP[:, var])
-        except FloatingPointError as e:
-            logger.error('Var ' + str(var) + ' failed plotting somehow...')
-            print(e)
-
-    glogger.show()
-
     try:
-        epochs = input("Number of generations (200): ")
+        epochs = input("Number of generations (1): ")
     except SyntaxError as e:
-        epochs = 200
+        epochs = 1
 
-    for times in range(100):
+    for ((tP, tT), (vP, vT)) in TandV:
         #train
         net = test(net, tP, tT, vP, vT, filename, epochs, population_size = pop_size, mutation_rate = mutation_rate)
 
-        raw_input("Press enter to show plots...")
-        glogger.show()
+        if plt:
+            outputs = net.sim(tP)
+            threshold = kaplanmeier(time_array = tT[:, 0], event_array = tT[:, 1], output_array = outputs[:, 0])
+            if len(vP) > 0:
+                outputs = net.sim(vP)
+                kaplanmeier(time_array = vT[:, 0], event_array = vT[:, 1], output_array = outputs[:, 0], threshold = threshold)
+            print("\nThreshold dividing the training set in two equal pieces: " + str(threshold))
+
+            raw_input("\nPress enter to show plots...")
+            plt.show()
         try:
-            answer = input('Do you wish to print network output? [y]: ')
-        except SyntaxError as e:
-            answer = 'y'
-        if answer == 'y' or answer == 'yes':
-            ps, ts = studies[filename]
-            outputs = net.sim(ps)
-            print_output(filename, outputs)
+            answer = input("Do you wish to print network output? Enter filename, or 'no' / 'n'. ['n']: ")
+        except (SyntaxError, NameError):
+            answer = 'n'
+        if os.path.exists(answer):
+            print("File exists. Will add random number to front")
+            answer = str(random.randint(0, 123456)) + answer
+        if answer != 'n' and answer != 'no':
+            print_output(answer, net, filename, targetcols = [4, 5], inputcols = columns, ignorerows = [0], normalize = True)
 
 def cross_validation_test():
-    glogger.setLoggingLevel(glogger.nothing)
 
     filename = "/home/gibson/jonask/Dropbox/Ann-Survival-Phd/Two_thirds_of_SA_1889_dataset.txt"
 
     #try:
     #    columns = input("Which columns to include? (Do NOT forget trailing comma if only one column is used, e.g. '3,'\nAvailable columns are: 2, -4, -3, -2, -1. Just press ENTER for all columns.\n")
     #except SyntaxError:
-    columns = (2, -4, -3, -2, -1)
+    if len(sys.argv) < 3:
+        columns = (2, -4, -3, -2, -1)
+    else:
+        columns = [int(col) for col in sys.argv[2:]]
+
     print('\nIncluding columns: ' + str(columns))
 
     P, T = parse_file(filename, targetcols = [4, 5], inputcols = columns, ignorerows = [0], normalize = True)
     #remove tail censored
     #print('\nRemoving tail censored...')
-    #P, T = copy_without_tailcensored(P, T)
+    #P, T = copy_without_censored(P, T)
 
     print("\nData set:")
     print("Number of patients with events: " + str(T[:, 1].sum()))
@@ -216,7 +230,7 @@ def cross_validation_test():
     #try:
     #    comsize = input("Number of networks to cross-validate [10]: ")
     #except SyntaxError:
-    comsize = 4
+    comsize = 5
     print('\nNumber of networks to cross-validate: ' + str(comsize))
 
     times_to_cross = 3
@@ -228,25 +242,25 @@ def cross_validation_test():
     if len(sys.argv) < 2:
         netsize = 3
     else:
-        netsize = sys.argv[1]
+        netsize = int(sys.argv[1])
     print("Number of hidden nodes: " + str(netsize))
 
     #try:
     #    pop_size = input('Population size [50]: ')
     #except SyntaxError as e:
-    pop_size = 50
+    pop_size = 100
     print("Population size: " + str(pop_size))
 
     #try:
     #    mutation_rate = input('Please input a mutation rate (0.25): ')
     #except SyntaxError as e:
-    mutation_rate = 0.15
+    mutation_rate = 0.05
     print("Mutation rate: " + str(mutation_rate))
 
     #try:
     #    epochs = input("Number of generations (200): ")
     #except SyntaxError as e:
-    epochs = 200
+    epochs = 1000
     print("Epochs: " + str(epochs))
 
     for _ in xrange(times_to_cross):
@@ -261,8 +275,7 @@ def cross_validation_test():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level = logging.INFO)
-    glogger.setLoggingLevel(glogger.debug)
+    logging.basicConfig(level = logging.DEBUG)
 
-    #train_single()
-    cross_validation_test()
+    train_single()
+    #cross_validation_test()
